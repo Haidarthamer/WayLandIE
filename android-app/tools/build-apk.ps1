@@ -98,12 +98,33 @@ $ResolvedNdk = Resolve-NdkRoot `
     -RequiredClangRelativePath $RequiredNdkClangRelativePath
 $NdkRoot = $ResolvedNdk.Root
 $NdkLookupPaths = $ResolvedNdk.LookedPaths
-$BuildTools = Join-Path $SdkRoot "build-tools\36.1.0"
+$BuildTools = if ($env:ANDROID_BUILD_TOOLS -and (Test-Path $env:ANDROID_BUILD_TOOLS)) {
+    $env:ANDROID_BUILD_TOOLS
+} else {
+    $BuildToolsRoot = Join-Path $SdkRoot "build-tools"
+    if (-not (Test-Path $BuildToolsRoot)) {
+        throw "Android build-tools directory not found: $BuildToolsRoot"
+    }
+    $Candidate = Get-ChildItem -Path $BuildToolsRoot -Directory |
+        Sort-Object Name -Descending |
+        Where-Object {
+            (Test-Path (Join-Path $_.FullName "aapt2.exe")) -and
+            (Test-Path (Join-Path $_.FullName "d8.bat")) -and
+            (Test-Path (Join-Path $_.FullName "apksigner.bat")) -and
+            (Test-Path (Join-Path $_.FullName "zipalign.exe"))
+        } |
+        Select-Object -First 1
+    if (-not $Candidate) {
+        throw "No complete Android build-tools installation was found under $BuildToolsRoot"
+    }
+    $Candidate.FullName
+}
 $AndroidJar = Join-Path $SdkRoot "platforms\android-36\android.jar"
 $Aapt2 = Join-Path $BuildTools "aapt2.exe"
 $D8 = Join-Path $BuildTools "d8.bat"
 $ApkSigner = Join-Path $BuildTools "apksigner.bat"
 $ZipAlign = Join-Path $BuildTools "zipalign.exe"
+Write-Host "Using Android Build Tools: $BuildTools"
 
 if (-not $JavaHome) {
     $Java = (Get-Command java.exe).Source
